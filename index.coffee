@@ -7,14 +7,50 @@ mongojs        = require 'mongojs'
 MESSAGE_SCHEMA = {
   type: 'object'
   properties:
-    collection:
+    action:
       type: 'string'
-      required: true
-    exampleString:
+    query:
       type: 'string'
-      required: true
+    update:
+      type: 'string'
+    value:
+      type: 'string'
 }
 
+ACTION_MAP = [
+  {
+    'value': 'find'
+    'name': 'Find'
+  }
+  {
+    'value': 'findAndModify'
+    'name': 'Find and Modify'
+  }
+  {
+    'value': 'insert'
+    'name': 'Insert'
+  }
+]
+
+MESSAGE_FORM_SCHEMA = [
+  {
+    'key': 'action'
+    'type': 'select'
+    'titleMap': ACTION_MAP
+  }
+  {
+    'key': 'query'
+    'condition': "model.action == 'find' || model.action == 'findAndModify'"
+  }
+  {
+    'key': 'update'
+    'condition': "model.action == 'findAndModify'"
+  }
+  {
+    'key': 'value'
+    'condition': "model.action == 'insert'"
+  }
+]
 
 OPTIONS_SCHEMA = {
   type: 'object'
@@ -49,23 +85,64 @@ class Plugin extends EventEmitter
   constructor: ->
     @options = DEFAULT_OPTIONS
     @messageSchema = MESSAGE_SCHEMA
+    @messageFormSchema = MESSAGE_FORM_SCHEMA
     @optionsSchema = OPTIONS_SCHEMA
 
   onMessage: (message) =>
     console.log "message received", message
     return unless message
+    { collection, action } = message.payload
     @getConnection((error, collection) =>
       console.log "Connected to database"
-      collection.insert message, (dbError, result) =>
-        return @emit('error', dbError) if dbError
-        console.log "Record inserted", result
-        response =
-          devices : ["*"]
-          topic : "mongo-insert"
-          result: result
-        @emit 'message', response
+
+      switch action
+        when "find" then @find(message, collection)
+        when "findAndModify" then @findAndModify(message, collection)
+        when "insert" then @insert(message, collection)
     )
 
+  find: (message, collection) =>
+    self = @
+    {query} = message.payload
+    query = JSON.parse(query) if typeof query is 'string'
+
+    collection.find query, (err, doc) ->
+      return if !doc
+      response =
+        devices : ["*"]
+        topic : "mongo-find"
+        result: doc
+      self.emit 'message', response
+
+  findAndModify: (message, collection) =>
+    self = @
+    {query, update} = message.payload
+    query = JSON.parse(query) if typeof query is 'string'
+    update = JSON.parse(update) if typeof update is 'string'
+    collection.findAndModify {
+      query: query
+      update: update
+      new: true
+    }, (err, doc, lastErrorObject) ->
+      response =
+        devices : ["*"]
+        topic : "mongo-findAndModify"
+        result: doc
+      self.emit 'message', response
+
+
+  insert: (message, collection) =>
+    self = @
+    {value} = message.payload
+    value = JSON.parse(value) if typeof value is 'string'
+    collection.insert value, (dbError, result) =>
+      return @emit('error', dbError) if dbError
+      console.log "Record inserted", result
+      response =
+        devices : ["*"]
+        topic : "mongo-insert"
+        result: result
+      self.emit 'message', response
 
   onConfig: (device) =>
     console.log "Device", device
@@ -95,5 +172,6 @@ class Plugin extends EventEmitter
 
 module.exports =
   messageSchema: MESSAGE_SCHEMA
+  messageFormSchema: MESSAGE_FORM_SCHEMA
   optionsSchema: OPTIONS_SCHEMA
   Plugin: Plugin

@@ -1,7 +1,7 @@
 {
   "name": "meshblu-mongodb-forwarder",
   "repository": "octoblu/meshblu-mongodb-forwarder",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "connector.js",
   "scripts": {
     "preinstall": "node -e \"try{require('./skip-install.js')}catch(e){}\"",

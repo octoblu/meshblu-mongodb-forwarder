@@ -46,6 +46,7 @@ class Connector extends EventEmitter
         uuid:          @config.uuid
         token:         @config.token
         messageSchema: @plugin.messageSchema
+        messageFormSchema: @plugin.messageFormSchema
         optionsSchema: @plugin.optionsSchema
         options:       @plugin.options
         initializing:  false
